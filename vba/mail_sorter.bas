@@ -1,7 +1,9 @@
 Attribute VB_Name = "mail_sorter"
+
 '-----------------------------------------------
 ' CHANGELOG
 '-----------------------------------------------
+'rev2.1: some fixes to better auto sort mails
 'rev2.0: added automated single mail archival, as well as automated batch process of folder
 'rev1.2: works with appointments as well
 'rev1.1: fixed crash when no correct value given; now shows title in messagebox
@@ -33,9 +35,9 @@ Sub startFullyAutomatedItemMoveBasedOnConversation()
 End Sub
 
 Sub startOneAutomaticItemMoveBasedOnConversation()
- Dim target_folder As String
- Dim item As Object
- 
+Dim target_folder As String
+Dim item As Object
+
     If Application.ActiveExplorer.Selection.Count = 1 Then
         Set item = Application.ActiveExplorer.Selection.item(1)
                
@@ -90,7 +92,51 @@ Public Function abbreviation(text As String) As MAPIFolder
             Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\" + Format(Date, "yyyy"))
         Case "conf"
             Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\CONFIDENTIAL")
-        '...
+        Case "opl"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\01. Elia\opleidingen")
+        Case "car"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\01. Elia\leasing")
+        Case "it"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\01. Elia\IT")
+        Case "news"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\01. Elia\news")
+        Case "priv"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\z_prive")
+        Case "fun"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\z_fun")
+            
+            'gd
+        Case "adq"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\adqflex")
+        Case "adv"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\advisory")
+        Case "ct"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\coreteam")
+        Case "crm"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\CRM")
+        Case "do"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\dataorg")
+        Case "eu"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\entsoe")
+        Case "fop"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\FOP")
+        Case "gd"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\general")
+        Case "de"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\spoc_DE")
+        Case "sr"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\SR")
+        Case "tf"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\taskforce")
+        Case "tir"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\tirole")
+        Case "vec"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\04. GD\vectoren")
+            
+            'ipm
+        Case "ipm"
+            Set objFolder = GetMAPIFolderFromStringPath("Personal Folders\archief\z_old\03. EE\01. IPM")
+            
     End Select
     Set abbreviation = objFolder
 End Function
@@ -156,7 +202,7 @@ Public Function GetMAPIFolderFromStringPath(strFolderPath As String) As MAPIFold
   If Not objFolder Is Nothing Then
     For i = 1 To UBound(arrFolders)
       Set colFolders = objFolder.Folders
-      Set objFolder = Nothing
+     Set objFolder = Nothing
       Set objFolder = colFolders.item(arrFolders(i))
       If objFolder Is Nothing Then
         Exit For
@@ -203,9 +249,10 @@ End Sub
 
 Sub MoveItemsBasedOnConversation()
     '***************************************************************************
-    'Purpose:
-    'Inputs
-    'Outputs:
+    'Purpose: move all messages in the currently selected folder to target
+    ' folders based on the location of other items of the same conversation
+    'Inputs: -
+    'Outputs: -
     '***************************************************************************
 
     'declare
@@ -268,7 +315,7 @@ Function is_conversation_enabled(objFolder As Outlook.MAPIFolder)
     '***************************************************************************
 
     Dim return_value As Boolean
-    Dim objItem  As Outlook.Items
+   Dim objItem  As Outlook.Items
     
     Set objItems = objFolder.Items
     
@@ -288,24 +335,29 @@ Function get_target_folder_based_on_conversation(currentItem As Object) As Strin
     '***************************************************************************
     'Purpose: returns a string representation of the folder of currentItem's parent mail item
     'Inputs: current mail item
-    'Outputs: string
+    'Outputs: string e.g. \\Jorrit.VanderMynsbrugge@elia.be\archief\z_prive
     '***************************************************************************
 
-    Dim theMailItem As Outlook.MailItem
+    If currentItem.Subject = "schedule next F2F meeting " Then
+        Debug.Print ("got it")
+    End If
+    
+
+    Dim this_mail_item As Outlook.MailItem
     Dim return_value As String
     return_value = ""
     
     ' Check if the item is a MailItem
     If TypeOf currentItem Is Outlook.MailItem Then
-        Set theMailItem = currentItem
+        Set this_mail_item = currentItem
     Else
         return_value = "FAIL: This item Is Not a mail item."
         GoTo end_function
     End If
     
     ' check if there is a conversation
-    Dim theConversation As Outlook.Conversation
-    Set theConversation = theMailItem.GetConversation
+    Dim theConversation As Outlook.conversation
+    Set theConversation = this_mail_item.GetConversation
     If IsNull(theConversation) Then
         return_value = "FAIL: This item Is Not a part of a conversation."
         GoTo end_function
@@ -318,42 +370,67 @@ Function get_target_folder_based_on_conversation(currentItem As Object) As Strin
     End If
     
     ' check uniqueness of root item of the conversation
-    Dim group As Outlook.SimpleItems
-    Set group = theConversation.GetRootItems
-    
-    If group.Count > 1 Then
-        return_value = "FAIL: This item has multiple root items."
-        GoTo end_function
-    End If
+    Dim root_items_collection As Outlook.SimpleItems
+    Set root_items_collection = theConversation.GetRootItems
+'    commented out this check because even if there are 2 root items we can simply grab the first one's location
+'    If root_items_collection.Count > 1 Then
+'        return_value = "FAIL: This item has multiple root items."
+'        GoTo end_function
+'    End If
     
     ' check that the root item itself is a mailitem
-    Dim obj As Object
-    Set obj = group.item(1)
-    If Not TypeOf obj Is Outlook.MailItem Then
+    Dim root_item As Object
+    Set root_item = root_items_collection.item(1)
+    If Not TypeOf root_item Is Outlook.MailItem Then
         return_value = "FAIL: This item has a root item that Is Not an email."
         GoTo end_function
     End If
     
-    ' check that the mailitem is not the root item itself
-    Dim mi As Outlook.MailItem
-    Set mi = obj
-    If theMailItem.ConversationIndex = mi.ConversationIndex Then
-        return_value = "FAIL: This item Is the root item."
-        GoTo end_function
-    End If
-    
-    ' check that the root item is not inbox or sent
+    ' distinguish between the mail item being the root or a child
+    Dim root_item_mailitem As Outlook.MailItem
+    Set root_item_mailitem = root_item
     Dim fld As Outlook.Folder
-    Set fld = mi.Parent
-    If fld.Name = "Inbox" Then
-        return_value = "FAIL: This item has a root item that Is inbox."
-        GoTo end_function
+    If this_mail_item.ConversationIndex = root_item_mailitem.ConversationIndex Then
+        ' this mail item is the root item - look for a folder in the children
+        Dim child_items_collection As Outlook.SimpleItems
+        Set child_items_collection = theConversation.GetChildren(root_item_mailitem)
+        
+        found_a_folder = False
+        For i = 1 To child_items_collection.Count
+            Dim child_item As Object
+            Set child_item = child_items_collection.item(i)
+            
+            Set fld = child_item.Parent
+            
+            If fld.Name = "Inbox" Then
+                GoTo ContinueForLoop
+            End If
+            If fld.Name = "Sent" Or fld.Name = "Sent Items" Then
+                GoTo ContinueForLoop
+            End If
+            
+            found_a_folder = True
+
+ContinueForLoop:
+        Next i
+        
+        If Not found_a_folder Then
+            return_value = "FAIL: This item Is the root item, and no folder was found with the children."
+            GoTo end_function
+        End If
+    Else
+        ' this mail item is NOT the root item
+        ' check that the root item is not inbox or sent
+        Set fld = root_item_mailitem.Parent
+        If fld.Name = "Inbox" Then
+            return_value = "FAIL: This item has a root item that Is inbox."
+            GoTo end_function
+        End If
+        If fld.Name = "Sent" Or fld.Name = "Sent Items" Then
+            return_value = "FAIL: This item has a root item that Is sent."
+            GoTo end_function
+        End If
     End If
-    If fld.Name = "Sent" Then
-        return_value = "FAIL: This item has a root item that Is sent."
-        GoTo end_function
-    End If
-    
     ' if we get here it is safe to move the mail item
     return_value = fld.FolderPath
     
