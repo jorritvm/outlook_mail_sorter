@@ -338,7 +338,12 @@ Private Function getTargetFolderFromConversation(currentitem As Object) As Strin
         result = "FAIL - no folder found" ' initial reply
         Set root_items = theConversation.GetRootItems
         For Each root_item In root_items
-            'per root item we loop through the whole underlying conversation
+            ' the root item can already be in the conversation target folder
+            If Not IsInArray(root_item.Parent.Name, excludeTargetFolders) Then
+                result = root_item.Parent.FolderPath
+            End If
+                
+            ' in addition, per root item we loop through the whole underlying conversation
             Set child_items = theConversation.GetChildren(root_item)
             For Each child_item In child_items
                 If Not IsInArray(child_item.Parent.Name, excludeTargetFolders) Then
